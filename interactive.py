@@ -9,6 +9,3 @@ serial_port = serial.Serial(port, baudrate=baudrate, timeout=timeout, xonxoff=xo
 scope = lecroy.LeCroy(serial_port)
 scope.remote()
 print("Connected to {}".format(scope.identification))
-
-import pickle
-w = pickle.load(open('waveform.pkl'))

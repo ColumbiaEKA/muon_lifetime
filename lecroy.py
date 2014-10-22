@@ -78,11 +78,16 @@ class LeCroy(object):
     def auto_calibrate(self, boolean):
         self.send('AUTO_CALIBRATE {}'.format(self.boolean_to_token[boolean]))
 
-    def _decimal_bytes_to_int(self, bytes):
-        return int(''.join([str(d) for d in bytes]))
+    def _hex_bytes_to_int(self, bytes):
+        return int(''.join(bytes), 16)
 
-    def _decimal_bytes_to_str(self, bytes):
-        return ''.join([chr(d) for d in bytes])
+    def _hex_bytes_to_str(self, bytes):
+        return ''.join([chr(int(b, 16)) for b in bytes])
+
+    def _hex_bytes_to_signed_int(self, bytes):
+        binary_format_code = '{{:0{}b}}'.format(8 * len(bytes))
+        binary = binary_format_code.format(int(''.join(bytes), 16))
+        return int(binary, 2) - int(binary[0], 2) * 2**len(binary)
 
     @property
     def waveform(self):
@@ -93,31 +98,39 @@ class LeCroy(object):
         block_length = int(content[1:int(content[0])+1])
         if len(content) != 1 + int(content[0]) + block_length:
             raise ValueError("Message length does not match value given in header.")
-        hex_pairs = content[1 + int(content[0]):]
-        decimal_data = [int(a + b, 16) for a, b in zip(hex_pairs[::2], hex_pairs[1::2])]
+        hex_nibbles = content[1 + int(content[0]):]
+        # Add ordering check.
+        hex_bytes = [a+b for a, b in zip(hex_nibbles[::2], hex_nibbles[1::2])]
         waveform = {}
-        waveform['descriptor_name'] = self._decimal_bytes_to_str(decimal_data[:16])
-        waveform['template_name'] = self._decimal_bytes_to_str(decimal_data[16:32])
-        waveform['comm_type'] = self._decimal_bytes_to_int(decimal_data[32:34])
-        waveform['comm_order'] = self._decimal_bytes_to_int(decimal_data[34:36])
-        waveform['wave_descriptor'] = self._decimal_bytes_to_int(decimal_data[36:40])
-        waveform['user_text'] = self._decimal_bytes_to_int(decimal_data[40:44])
-        waveform['res_desc1'] = self._decimal_bytes_to_int(decimal_data[44:48]) # This isn't documented
-        waveform['trigtime_array'] = self._decimal_bytes_to_int(decimal_data[48:52])
-        waveform['ris_time_array'] = self._decimal_bytes_to_int(decimal_data[52:56])
-        waveform['res_array1'] = self._decimal_bytes_to_int(decimal_data[56:60])
-        waveform['wave_array_1'] = self._decimal_bytes_to_int(decimal_data[60:64])
-        waveform['wave_array_2'] = self._decimal_bytes_to_int(decimal_data[64:68])
-        waveform['instrument_name'] = self._decimal_bytes_to_str(decimal_data[76:92])
-        waveform['instrument_number'] = self._decimal_bytes_to_int(decimal_data[92:96])
-        waveform['trace_label'] = self._decimal_bytes_to_str(decimal_data[96:112])
-        waveform['wave_array_count'] = self._decimal_bytes_to_int(decimal_data[116:120])
-        waveform['points_per_screen'] = self._decimal_bytes_to_int(decimal_data[120:124])
-        waveform['timebase'] = self._decimal_bytes_to_int(decimal_data[324:326])
-        waveform['fixed_vert_gain'] = self._decimal_bytes_to_int(decimal_data[332:334])
-        waveform['wave_source'] = self._decimal_bytes_to_int(decimal_data[344:346])
-        #waveform['waveform'] = decimal_data[waveform['wave_descriptor_length'] + waveform['user_text_length']:]
-        return waveform, decimal_data
+        waveform['descriptor_name'] = self._hex_bytes_to_str(hex_bytes[:16])
+        waveform['template_name'] = self._hex_bytes_to_str(hex_bytes[16:32])
+        waveform['comm_type'] = self._hex_bytes_to_int(hex_bytes[32:34])
+        waveform['comm_order'] = self._hex_bytes_to_int(hex_bytes[34:36])
+        waveform['wave_descriptor'] = self._hex_bytes_to_int(hex_bytes[36:40])
+        waveform['user_text'] = self._hex_bytes_to_int(hex_bytes[40:44])
+        waveform['res_desc1'] = self._hex_bytes_to_int(hex_bytes[44:48]) # This isn't documented
+        waveform['trigtime_array'] = self._hex_bytes_to_int(hex_bytes[48:52])
+        waveform['ris_time_array'] = self._hex_bytes_to_int(hex_bytes[52:56])
+        waveform['res_array1'] = self._hex_bytes_to_int(hex_bytes[56:60])
+        waveform['wave_array_1'] = self._hex_bytes_to_int(hex_bytes[60:64])
+        waveform['wave_array_2'] = self._hex_bytes_to_int(hex_bytes[64:68])
+        waveform['res_array2'] = self._hex_bytes_to_int(hex_bytes[68:72])
+        waveform['res_array3'] = self._hex_bytes_to_int(hex_bytes[72:76])
+        waveform['instrument_name'] = self._hex_bytes_to_str(hex_bytes[76:92])
+        waveform['instrument_number'] = self._hex_bytes_to_int(hex_bytes[92:96])
+        waveform['trace_label'] = self._hex_bytes_to_str(hex_bytes[96:112])
+        #
+        waveform['wave_array_count'] = self._hex_bytes_to_int(hex_bytes[116:120])
+        waveform['points_per_screen'] = self._hex_bytes_to_int(hex_bytes[120:124])
+        #
+        waveform['timebase'] = self._hex_bytes_to_int(hex_bytes[324:326])
+        #
+        waveform['fixed_vert_gain'] = self._hex_bytes_to_int(hex_bytes[332:334])
+        waveform['wave_source'] = self._hex_bytes_to_int(hex_bytes[344:346])
+        data = hex_bytes[waveform['wave_descriptor'] + waveform['user_text']:]
+        waveform['data'] = [self._hex_bytes_to_signed_int((high, low))
+                            for high, low in zip(data[::2], data[1::2])]
+        return waveform
 
 
 class LeCroyError(Exception):
