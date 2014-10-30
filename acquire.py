@@ -97,4 +97,7 @@ def main(user_directory, base_directory='C:\Student Directories', port='COM1', b
     acquire(scope, data_directory)
 
 if __name__ == "__main__":
-    main(sys.argv[1])
+    try:
+        main(sys.argv[1])
+    except IndexError:
+        print("Usage: python acquire.py <directory>")
